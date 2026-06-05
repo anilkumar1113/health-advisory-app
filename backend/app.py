@@ -1,18 +1,29 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 import mysql.connector
+import boto3
+import json
 import os
 
 app = Flask(__name__)
 CORS(app)
 
+def get_secret():
+    secret_name = os.environ.get('DB_SECRET_NAME', 'healthwise/db-credentials')
+    region = os.environ.get('AWS_REGION', 'us-east-1')
+
+    client = boto3.client('secretsmanager', region_name=region)
+    resp = client.get_secret_value(SecretId=secret_name)
+    return json.loads(resp['SecretString'])
+
 def get_db():
+    secret = get_secret()
     return mysql.connector.connect(
-        host=os.environ.get('DB_HOST', 'localhost'),
-        user=os.environ.get('DB_USER', 'admin'),
-        password=os.environ.get('DB_PASSWORD', 'password'),
+        host=secret.get('host'),
+        user=secret.get('username'),
+        password=secret.get('password'),
         database=os.environ.get('DB_NAME', 'health_advisory'),
-        port=int(os.environ.get('DB_PORT', 3306))
+        port=int(secret.get('port', 3306))
     )
 
 
