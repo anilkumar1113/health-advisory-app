@@ -4,6 +4,7 @@ import mysql.connector
 import boto3
 import json
 import os
+import requests as http_requests
 
 app = Flask(__name__)
 CORS(app)
@@ -116,6 +117,65 @@ def get_conditions_by_category(category_id):
     cursor.close()
     db.close()
     return jsonify(conditions)
+
+
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    data = request.get_json()
+    user_message = data.get('message', '').strip()
+
+    if not user_message:
+        return jsonify({"error": "Message is required"}), 400
+
+    system_prompt = """You are HealthWise AI, a helpful health advisory assistant.
+    Provide accurate, evidence-based health information about:
+    - Food recommendations for health conditions
+    - Medicine guidance (always add disclaimer to consult doctor)
+    - Health tips and lifestyle advice
+    - Pregnancy week-by-week guidance
+    - Nutrition and diet advice
+
+    Rules:
+    - Always recommend consulting a qualified doctor for serious conditions
+    - Never diagnose conditions - only provide general information
+    - Keep responses concise and well-formatted with bullet points
+    - If asked about emergencies, tell them to call emergency services immediately
+    - Respond in the same language the user asks in"""
+
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": system_prompt + "\n\nUser question: " + user_message}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 1024
+        }
+    }
+
+    try:
+        resp = http_requests.post(
+            f"{GEMINI_URL}?key={GEMINI_API_KEY}",
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=30
+        )
+
+        if resp.status_code != 200:
+            return jsonify({"error": "AI service unavailable", "details": resp.text}), 500
+
+        result = resp.json()
+        ai_response = result['candidates'][0]['content']['parts'][0]['text']
+
+        return jsonify({"response": ai_response})
+
+    except Exception as e:
+        return jsonify({"error": f"Chat failed: {str(e)}"}), 500
 
 
 if __name__ == '__main__':
