@@ -1,0 +1,18 @@
+version: 0.0
+os: linux
+files:
+  - source: /backend
+    destination: /opt/health-advisory-app/backend
+hooks:
+  AfterInstall:
+    - location: scripts/after_install.sh
+      timeout: 300
+      runsAs: root
+  ApplicationStart:
+    - location: scripts/start_app.sh
+      timeout: 60
+      runsAs: root
+  ApplicationStop:
+    - location: scripts/stop_app.sh
+      timeout: 30
+      runsAs: root
